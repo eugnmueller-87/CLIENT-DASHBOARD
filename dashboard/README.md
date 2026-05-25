@@ -4,7 +4,7 @@
 ![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=flat&logo=prometheus&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/license-private-lightgrey?style=flat)
-![Status](https://img.shields.io/badge/status-in%20development-yellow?style=flat)
+![Status](https://img.shields.io/badge/status-live-brightgreen?style=flat)
 
 Internal ops tool for monitoring all client projects from a single Grafana Cloud instance. Not a client deliverable — this is agency infrastructure.
 

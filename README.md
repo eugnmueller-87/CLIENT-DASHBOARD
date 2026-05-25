@@ -4,9 +4,21 @@
 ![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=flat&logo=prometheus&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/license-private-lightgrey?style=flat)
-![Status](https://img.shields.io/badge/status-in%20development-yellow?style=flat)
+![Status](https://img.shields.io/badge/status-live-brightgreen?style=flat)
+![Server](https://img.shields.io/badge/server-187.124.14.81-blue?style=flat&logo=hostinger)
 
 Internal ops tool for monitoring all client projects from a single Grafana Cloud instance. Not a client deliverable — this is agency infrastructure.
+
+## Current status
+
+| Component | Status |
+|---|---|
+| Grafana Cloud stack | Live — `eugnmueller87.grafana.net` |
+| Agency server (`187.124.14.81`) | Running — Ubuntu 24.04 LTS |
+| grafana-agent | Running |
+| node-exporter | Running — CPU 14%, Memory 34%, Disk 16% |
+| blackbox-exporter | Running |
+| Metabelly monitoring | Pending — app not deployed yet |
 
 Each client VPS runs a lightweight agent stack (grafana-agent + node-exporter + blackbox-exporter) that scrapes metrics locally and ships them to Grafana Cloud via remote_write. All clients are visible in one dashboard, separated by a `client` label.
 

@@ -24,8 +24,9 @@ metrics:
             module: [http_2xx]
           static_configs:
             - targets:
-                - https://example-client-a.com/health   # replace with real URLs
-                # - https://example-client-b.com/health
+                # Add client app URLs here, e.g.:
+                # - https://metabelly.com/health
+                # - https://client-b.com/health
           relabel_configs:
             - source_labels: [__address__]
               target_label: __param_target
