@@ -91,8 +91,8 @@
       "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "expr": "100 - (avg by(host) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
-          "legendFormat": "{{ host }}",
+          "expr": "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+          "legendFormat": "{{ instance }}",
           "refId": "A"
         }
       ],
@@ -111,7 +111,7 @@
       "targets": [
         {
           "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
-          "legendFormat": "{{ host }}",
+          "legendFormat": "{{ instance }}",
           "refId": "A"
         }
       ],
@@ -130,7 +130,7 @@
       "targets": [
         {
           "expr": "(1 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay\",mountpoint=\"/\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay\",mountpoint=\"/\"})) * 100",
-          "legendFormat": "{{ host }}",
+          "legendFormat": "{{ instance }}",
           "refId": "A"
         }
       ],
