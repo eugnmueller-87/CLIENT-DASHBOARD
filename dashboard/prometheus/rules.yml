@@ -24,12 +24,12 @@ groups:
     interval: 60s
     rules:
       - alert: HighCPU
-        expr: 100 - (avg by(host) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
         for: 10m
         labels:
           severity: warning
         annotations:
-          summary: "High CPU on {{ $labels.host }}"
+          summary: "High CPU on {{ $labels.instance }}"
           description: "CPU usage is {{ $value | humanize }}% for 10+ minutes."
 
       - alert: HighMemory
@@ -38,7 +38,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "High memory on {{ $labels.host }}"
+          summary: "High memory on {{ $labels.instance }}"
           description: "Memory usage is {{ $value | humanize }}%."
 
       - alert: DiskSpaceLow
@@ -47,7 +47,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Low disk on {{ $labels.host }}"
+          summary: "Low disk on {{ $labels.instance }}"
           description: "Disk {{ $labels.mountpoint }} is {{ $value | humanize }}% full."
 
   - name: api_costs
