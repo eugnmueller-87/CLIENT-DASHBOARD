@@ -2,15 +2,14 @@ version: "3.8"
 
 services:
   grafana-agent:
-    image: grafana/agent:latest
+    image: grafana/agent:v0.40.4
     container_name: grafana-agent
     restart: unless-stopped
     volumes:
       - ./agent-config.yml:/etc/agent/agent-config.yml
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     command:
-      - run
-      - /etc/agent/agent-config.yml
+      - -config.file=/etc/agent/agent-config.yml
+      - -config.expand-env=true
     environment:
       - GRAFANA_CLOUD_URL=${GRAFANA_CLOUD_URL}
       - GRAFANA_CLOUD_USER=${GRAFANA_CLOUD_USER}
