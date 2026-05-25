@@ -5,7 +5,6 @@
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/license-private-lightgrey?style=flat)
 ![Status](https://img.shields.io/badge/status-live-brightgreen?style=flat)
-![Server](https://img.shields.io/badge/server-187.124.14.81-blue?style=flat&logo=hostinger)
 
 Internal ops tool for monitoring all client projects from a single Grafana Cloud instance. Not a client deliverable — this is agency infrastructure.
 
@@ -14,7 +13,7 @@ Internal ops tool for monitoring all client projects from a single Grafana Cloud
 | Component | Status |
 |---|---|
 | Grafana Cloud stack | Live — `eugnmueller87.grafana.net` |
-| Agency server (`187.124.14.81`) | Running — Ubuntu 24.04 LTS |
+| Agency server | Running — Ubuntu 24.04 LTS |
 | grafana-agent | Running |
 | node-exporter | Running — CPU 14%, Memory 34%, Disk 16% |
 | blackbox-exporter | Running |
