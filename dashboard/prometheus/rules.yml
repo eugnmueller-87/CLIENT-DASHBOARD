@@ -1,0 +1,65 @@
+groups:
+  - name: uptime
+    interval: 60s
+    rules:
+      - alert: AppDown
+        expr: probe_success == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.instance }} is DOWN"
+          description: "HTTP probe has been failing for more than 2 minutes."
+
+      - alert: HighResponseTime
+        expr: probe_duration_seconds > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }} slow response"
+          description: "Response time is {{ $value | humanizeDuration }} (threshold: 3s)."
+
+  - name: infrastructure
+    interval: 60s
+    rules:
+      - alert: HighCPU
+        expr: 100 - (avg by(host) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU on {{ $labels.host }}"
+          description: "CPU usage is {{ $value | humanize }}% for 10+ minutes."
+
+      - alert: HighMemory
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory on {{ $labels.host }}"
+          description: "Memory usage is {{ $value | humanize }}%."
+
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk on {{ $labels.host }}"
+          description: "Disk {{ $labels.mountpoint }} is {{ $value | humanize }}% full."
+
+  - name: api_costs
+    interval: 5m
+    rules:
+      - alert: HighDailyAPISpend
+        # Requires app to expose: api_tokens_used_total{client, provider}
+        # Adjust threshold (50000 tokens) to match your budget
+        expr: increase(api_tokens_used_total[24h]) > 50000
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API usage for {{ $labels.client }}"
+          description: "{{ $labels.provider }} token usage in last 24h: {{ $value | humanize }}."

@@ -1,0 +1,53 @@
+metrics:
+  global:
+    scrape_interval: 30s
+    external_labels:
+      host: ${CLIENT_LABEL}
+
+  configs:
+    - name: default
+      scrape_configs:
+
+        # ── Node / infrastructure ──────────────────────────────────────────
+        - job_name: node
+          static_configs:
+            - targets: ["localhost:9100"]
+              labels:
+                client: ${CLIENT_LABEL}
+
+        # ── HTTP uptime (blackbox) ─────────────────────────────────────────
+        # Add each client app URL below. Blackbox probes the URL and exposes
+        # probe_success (1 = up, 0 = down) and probe_duration_seconds.
+        - job_name: blackbox_http
+          metrics_path: /probe
+          params:
+            module: [http_2xx]
+          static_configs:
+            - targets:
+                - https://example-client-a.com/health   # replace with real URLs
+                # - https://example-client-b.com/health
+          relabel_configs:
+            - source_labels: [__address__]
+              target_label: __param_target
+            - source_labels: [__param_target]
+              target_label: instance
+            - target_label: __address__
+              replacement: localhost:9115
+
+        # ── App custom metrics (request volume, API cost) ──────────────────
+        # Each client app exposes /metrics on the port below.
+        # Duplicate this block per client, changing the target and client label.
+        - job_name: app_metrics
+          static_configs:
+            - targets: ["localhost:8000"]   # replace with client app host:port
+              labels:
+                client: ${CLIENT_LABEL}
+
+      remote_write:
+        - url: ${GRAFANA_CLOUD_URL}
+          basic_auth:
+            username: ${GRAFANA_CLOUD_USER}
+            password: ${GRAFANA_CLOUD_API_KEY}
+          queue_config:
+            max_samples_per_send: 1000
+            max_shards: 5

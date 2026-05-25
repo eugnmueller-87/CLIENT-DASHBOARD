@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  grafana-agent:
+    image: grafana/agent:latest
+    container_name: grafana-agent
+    restart: unless-stopped
+    volumes:
+      - ./agent-config.yml:/etc/agent/agent-config.yml
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - run
+      - /etc/agent/agent-config.yml
+    environment:
+      - GRAFANA_CLOUD_URL=${GRAFANA_CLOUD_URL}
+      - GRAFANA_CLOUD_USER=${GRAFANA_CLOUD_USER}
+      - GRAFANA_CLOUD_API_KEY=${GRAFANA_CLOUD_API_KEY}
+      - CLIENT_LABEL=${CLIENT_LABEL}
+    network_mode: host
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    ports:
+      - "9100:9100"
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: blackbox-exporter
+    restart: unless-stopped
+    volumes:
+      - ./blackbox.yml:/etc/blackbox/blackbox.yml
+    command:
+      - "--config.file=/etc/blackbox/blackbox.yml"
+    ports:
+      - "9115:9115"
