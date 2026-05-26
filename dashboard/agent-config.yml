@@ -35,14 +35,36 @@ metrics:
             - target_label: __address__
               replacement: localhost:9115
 
-        # ── App custom metrics (request volume, API cost) ──────────────────
-        # Each client app exposes /metrics on the port below.
-        # Duplicate this block per client, changing the target and client label.
+        # ── App custom metrics (request volume, API cost, token consumption) ──
+        # Each client app must expose a /metrics endpoint (Prometheus format).
+        # Duplicate this block per client, changing target and CLIENT_LABEL.
+        #
+        # Required counters the app must expose for cost/tier tracking:
+        #
+        #   api_tokens_used_total{client, provider, token_type, model}
+        #     - client:     matches CLIENT_LABEL (e.g. "metabelly")
+        #     - provider:   "anthropic" | "openai" | "openai-mini"
+        #     - token_type: "input" | "output"
+        #     - model:      e.g. "claude-sonnet-4-6", "gpt-4o"
+        #
+        #   http_requests_total{client, handler, status}   (for request rate panel)
+        #
+        # Python example (prometheus_client library):
+        #   from prometheus_client import Counter
+        #   TOKENS = Counter(
+        #     "api_tokens_used_total", "LLM token consumption",
+        #     ["client", "provider", "token_type", "model"]
+        #   )
+        #   # After each API call:
+        #   TOKENS.labels(client="metabelly", provider="anthropic",
+        #                 token_type="input",  model="claude-sonnet-4-6").inc(usage.input_tokens)
+        #   TOKENS.labels(client="metabelly", provider="anthropic",
+        #                 token_type="output", model="claude-sonnet-4-6").inc(usage.output_tokens)
         - job_name: app_metrics
           static_configs:
-            - targets: ["localhost:8000"]   # replace with client app host:port
+            - targets: ["localhost:8000"]
               labels:
-                client: ${CLIENT_LABEL}
+                client: metabelly
 
       remote_write:
         - url: ${GRAFANA_CLOUD_URL}

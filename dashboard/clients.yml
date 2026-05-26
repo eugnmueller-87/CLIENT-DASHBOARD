@@ -1,0 +1,41 @@
+# ── Client Tier Registry ──────────────────────────────────────────────────────
+#
+# Define each client here when onboarding them.
+# The CLIENT_NAME in their app's .env must match the `slug` field exactly.
+#
+# Tiers
+# ──────
+# Tier 1 — Starter:    up to  100,000 tokens/day  |  ~3M/month   | retainer: low
+# Tier 2 — Growth:     up to  500,000 tokens/day  |  ~15M/month  | retainer: mid
+# Tier 3 — Scale:      up to 2,000,000 tokens/day |  ~60M/month  | retainer: high
+#
+# Warning triggers fire at 80% of the daily limit.
+# Critical triggers fire at 100% of the daily limit.
+#
+# Add a new block per client. Duplicate the metabelly example below.
+
+clients:
+
+  - slug: metabelly
+    name: Metabelly
+    tier: 1
+    providers:
+      - mistral-small
+    daily_token_limit: 100000      # Tier 1 cap — triggers at 80k (warn) / 100k (critical)
+    monthly_token_limit: 3000000   # ~30 × daily cap
+    monthly_cost_limit_usd: 50     # alert if 30-day rolling cost exceeds this
+    retainer_usd: 500              # current monthly retainer — for context only
+    notes: "Croatian gut health brand. Mistral Small for email triage."
+
+  # ── Template for next client ──────────────────────────────────────────────
+  # - slug: client-b
+  #   name: Client B
+  #   tier: 2
+  #   providers:
+  #     - anthropic
+  #     - openai
+  #   daily_token_limit: 500000
+  #   monthly_token_limit: 15000000
+  #   monthly_cost_limit_usd: 300
+  #   retainer_usd: 2000
+  #   notes: ""

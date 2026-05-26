@@ -51,15 +51,187 @@ groups:
           description: "Disk {{ $labels.mountpoint }} is {{ $value | humanize }}% full."
 
   - name: api_costs
+    # Pricing as of 2025-Q2 — update when provider rates change.
+    #
+    # Provider         | Input ($/M tokens) | Output ($/M tokens)
+    # -----------------|-------------------|--------------------
+    # anthropic        |  3.00             |  15.00
+    # openai           |  5.00             |  15.00
+    # openai-mini      |  0.15             |   0.60
+    # mistral          |  2.00             |   6.00   (Mistral Large)
+    # mistral-small    |  0.10             |   0.30   (Mistral Small / Nemo)
+    #
+    # Token label schema expected from apps:
+    #   api_tokens_used_total{client, provider, token_type, model}
+    #   token_type = "input" | "output"
     interval: 5m
     rules:
-      - alert: HighDailyAPISpend
-        # Requires app to expose: api_tokens_used_total{client, provider}
-        # Adjust threshold (50000 tokens) to match your budget
-        expr: increase(api_tokens_used_total[24h]) > 50000
+
+      # ── Per-provider cost in USD (hourly, for the timeseries panel) ──────────
+      - record: api_cost_usd:per_provider:rate1h
+        expr: |
+          (
+            sum by (client, provider) (increase(api_tokens_used_total{token_type="input",  provider="anthropic"}[1h])) * 0.000003  +
+            sum by (client, provider) (increase(api_tokens_used_total{token_type="output", provider="anthropic"}[1h])) * 0.000015
+          )
+          or
+          (
+            sum by (client, provider) (increase(api_tokens_used_total{token_type="input",  provider="openai"}[1h])) * 0.000005  +
+            sum by (client, provider) (increase(api_tokens_used_total{token_type="output", provider="openai"}[1h])) * 0.000015
+          )
+          or
+          (
+            sum by (client, provider) (increase(api_tokens_used_total{token_type="input",  provider="openai-mini"}[1h])) * 0.00000015  +
+            sum by (client, provider) (increase(api_tokens_used_total{token_type="output", provider="openai-mini"}[1h])) * 0.0000006
+          )
+          or
+          (
+            sum by (client, provider) (increase(api_tokens_used_total{token_type="input",  provider="mistral"}[1h])) * 0.000002  +
+            sum by (client, provider) (increase(api_tokens_used_total{token_type="output", provider="mistral"}[1h])) * 0.000006
+          )
+          or
+          (
+            sum by (client, provider) (increase(api_tokens_used_total{token_type="input",  provider="mistral-small"}[1h])) * 0.0000001  +
+            sum by (client, provider) (increase(api_tokens_used_total{token_type="output", provider="mistral-small"}[1h])) * 0.0000003
+          )
+
+      # ── Daily total cost across all providers (used for tier alerts) ─────────
+      - record: api_cost_usd:total:rate24h
+        expr: |
+          sum by (client) (
+            increase(api_tokens_used_total{token_type="input",  provider="anthropic"}[24h])    * 0.000003   +
+            increase(api_tokens_used_total{token_type="output", provider="anthropic"}[24h])    * 0.000015   +
+            increase(api_tokens_used_total{token_type="input",  provider="openai"}[24h])       * 0.000005   +
+            increase(api_tokens_used_total{token_type="output", provider="openai"}[24h])       * 0.000015   +
+            increase(api_tokens_used_total{token_type="input",  provider="openai-mini"}[24h])  * 0.00000015 +
+            increase(api_tokens_used_total{token_type="output", provider="openai-mini"}[24h])  * 0.0000006  +
+            increase(api_tokens_used_total{token_type="input",  provider="mistral"}[24h])      * 0.000002   +
+            increase(api_tokens_used_total{token_type="output", provider="mistral"}[24h])      * 0.000006   +
+            increase(api_tokens_used_total{token_type="input",  provider="mistral-small"}[24h])* 0.0000001  +
+            increase(api_tokens_used_total{token_type="output", provider="mistral-small"}[24h])* 0.0000003
+          )
+
+      # ── Monthly cost rollup (30-day sliding window) ──────────────────────────
+      # Prometheus's max retention for range queries is limited, so we use
+      # a 30d increase() as the "month-to-date" approximation.
+      # For exact calendar-month billing export, use the cron push approach instead.
+      - record: api_cost_usd:total:rate30d
+        expr: |
+          sum by (client) (
+            increase(api_tokens_used_total{token_type="input",  provider="anthropic"}[30d])    * 0.000003   +
+            increase(api_tokens_used_total{token_type="output", provider="anthropic"}[30d])    * 0.000015   +
+            increase(api_tokens_used_total{token_type="input",  provider="openai"}[30d])       * 0.000005   +
+            increase(api_tokens_used_total{token_type="output", provider="openai"}[30d])       * 0.000015   +
+            increase(api_tokens_used_total{token_type="input",  provider="openai-mini"}[30d])  * 0.00000015 +
+            increase(api_tokens_used_total{token_type="output", provider="openai-mini"}[30d])  * 0.0000006  +
+            increase(api_tokens_used_total{token_type="input",  provider="mistral"}[30d])      * 0.000002   +
+            increase(api_tokens_used_total{token_type="output", provider="mistral"}[30d])      * 0.000006   +
+            increase(api_tokens_used_total{token_type="input",  provider="mistral-small"}[30d])* 0.0000001  +
+            increase(api_tokens_used_total{token_type="output", provider="mistral-small"}[30d])* 0.0000003
+          )
+
+      # ── Per-provider monthly token totals (for breakdown panel) ─────────────
+      - record: api_tokens:per_provider:rate30d
+        expr: |
+          sum by (client, provider) (
+            increase(api_tokens_used_total[30d])
+          )
+
+      # ── Monthly token total (input + output, all providers) ─────────────────
+      - record: api_tokens:total:rate30d
+        expr: |
+          sum by (client) (
+            increase(api_tokens_used_total[30d])
+          )
+
+      # ── Monthly tokens by type (input vs output) ─────────────────────────────
+      - record: api_tokens:by_type:rate30d
+        expr: |
+          sum by (client, token_type) (
+            increase(api_tokens_used_total[30d])
+          )
+
+      # ── Daily token total (for tier gauges) ──────────────────────────────────
+      - record: api_tokens:total:rate24h
+        expr: |
+          sum by (client) (
+            increase(api_tokens_used_total[24h])
+          )
+
+      # ── Alerts ───────────────────────────────────────────────────────────────
+      # Per-client thresholds are defined in clients.yml.
+      # Daily limits and cost caps below must be kept in sync with that file.
+      # Warning fires at 80% of daily limit; Critical fires at 100%.
+
+      # ── metabelly — Tier 1 (100k tokens/day, $50/month cap) ──────────────
+      - alert: DailyTokenWarning
+        expr: api_tokens:total:rate24h{client="metabelly"} > 80000
+        for: 0m
+        labels:
+          severity: warning
+          client: metabelly
+          tier: "1"
+        annotations:
+          summary: "metabelly approaching daily token limit (Tier 1)"
+          description: "{{ $value | humanize }} tokens today — 80% of 100k Tier 1 limit. Consider upgrading to Tier 2."
+
+      - alert: DailyTokenCritical
+        expr: api_tokens:total:rate24h{client="metabelly"} > 100000
+        for: 0m
+        labels:
+          severity: critical
+          client: metabelly
+          tier: "1"
+        annotations:
+          summary: "metabelly exceeded daily token limit (Tier 1)"
+          description: "{{ $value | humanize }} tokens today — over 100k Tier 1 limit. Upgrade to Tier 2 now."
+
+      - alert: MonthlyTokenWarning
+        expr: api_tokens:total:rate30d{client="metabelly"} > 2400000
+        for: 0m
+        labels:
+          severity: warning
+          client: metabelly
+          tier: "1"
+        annotations:
+          summary: "metabelly approaching monthly token limit (Tier 1)"
+          description: "{{ $value | humanize }} tokens this month — 80% of 3M Tier 1 limit."
+
+      - alert: MonthlyCostWarning
+        expr: api_cost_usd:total:rate30d{client="metabelly"} > 40
+        for: 0m
+        labels:
+          severity: warning
+          client: metabelly
+        annotations:
+          summary: "metabelly monthly API cost nearing cap"
+          description: "30-day cost: ${{ $value | humanize }} — approaching $50 monthly cap. Review retainer."
+
+      - alert: MonthlyCostCritical
+        expr: api_cost_usd:total:rate30d{client="metabelly"} > 50
+        for: 0m
+        labels:
+          severity: critical
+          client: metabelly
+        annotations:
+          summary: "metabelly monthly API cost exceeded cap"
+          description: "30-day cost: ${{ $value | humanize }} — over $50 monthly cap. Adjust retainer immediately."
+
+      # ── Generic fallback alerts (for clients not yet in clients.yml) ──────
+      - alert: UnknownClientHighDailyTokens
+        expr: api_tokens:total:rate24h{client!~"metabelly"} > 50000
         for: 0m
         labels:
           severity: warning
         annotations:
-          summary: "High API usage for {{ $labels.client }}"
-          description: "{{ $labels.provider }} token usage in last 24h: {{ $value | humanize }}."
+          summary: "High token usage for unregistered client {{ $labels.client }}"
+          description: "{{ $value | humanize }} tokens/day. Add this client to clients.yml to set proper tier limits."
+
+      - alert: UnknownClientHighMonthlyCost
+        expr: api_cost_usd:total:rate30d{client!~"metabelly"} > 100
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High monthly cost for unregistered client {{ $labels.client }}"
+          description: "30-day cost: ${{ $value | humanize }}. Add to clients.yml to set a proper cap."

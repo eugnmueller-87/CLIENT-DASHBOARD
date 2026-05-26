@@ -10,7 +10,48 @@
   "graphTooltip": 1,
   "id": null,
   "links": [],
+  "templating": {
+    "list": [
+      {
+        "name": "client",
+        "label": "Client",
+        "type": "query",
+        "datasource": { "type": "prometheus" },
+        "query": {
+          "query": "label_values(api_tokens_used_total, client)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": false,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": { "text": "All", "value": "$__all" },
+        "hide": 0,
+        "options": []
+      },
+      {
+        "name": "provider",
+        "label": "Provider",
+        "type": "query",
+        "datasource": { "type": "prometheus" },
+        "query": {
+          "query": "label_values(api_tokens_used_total, provider)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": { "text": "All", "value": "$__all" },
+        "hide": 0,
+        "options": []
+      }
+    ]
+  },
   "panels": [
+
     {
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
@@ -66,7 +107,7 @@
       "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "expr": "rate(http_requests_total[5m])",
+          "expr": "rate(http_requests_total{client=~\"$client\"}[5m])",
           "legendFormat": "{{ client }} – {{ handler }}",
           "refId": "A"
         }
@@ -74,6 +115,7 @@
       "title": "Request Rate (per client)",
       "type": "timeseries"
     },
+
     {
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
@@ -137,10 +179,11 @@
       "title": "Disk Usage % (root)",
       "type": "timeseries"
     },
+
     {
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 },
-      "title": "API Cost Tracking",
+      "title": "Token Consumption",
       "type": "row"
     },
     {
@@ -152,12 +195,17 @@
       "options": { "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "expr": "increase(api_tokens_used_total[1h])",
-          "legendFormat": "{{ client }} – {{ provider }}",
+          "expr": "sum by (client, provider) (increase(api_tokens_used_total{client=~\"$client\", provider=~\"$provider\", token_type=\"input\"}[$__range]))",
+          "legendFormat": "{{ client }} / {{ provider }} – input",
           "refId": "A"
+        },
+        {
+          "expr": "sum by (client, provider) (increase(api_tokens_used_total{client=~\"$client\", provider=~\"$provider\", token_type=\"output\"}[$__range]))",
+          "legendFormat": "{{ client }} / {{ provider }} – output",
+          "refId": "B"
         }
       ],
-      "title": "API Tokens Used (per hour)",
+      "title": "Input vs Output Tokens (time range)",
       "type": "timeseries"
     },
     {
@@ -166,17 +214,465 @@
         "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }
       },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 23 },
+      "options": {
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" },
+        "xTickLabelRotation": -30
+      },
+      "targets": [
+        {
+          "expr": "sum by (client) (increase(api_tokens_used_total{client=~\"$client\", token_type=\"input\"}[24h]))",
+          "legendFormat": "{{ client }} – input",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (client) (increase(api_tokens_used_total{client=~\"$client\", token_type=\"output\"}[24h]))",
+          "legendFormat": "{{ client }} – output",
+          "refId": "B"
+        }
+      ],
+      "title": "Tokens per Client (last 24h, stacked by type)",
+      "type": "barchart"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 31 },
       "options": { "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "expr": "increase(api_tokens_used_total[24h])",
-          "legendFormat": "{{ client }} – {{ provider }}",
+          "expr": "sum by (client, provider) (increase(api_tokens_used_total{client=~\"$client\", provider=~\"$provider\"}[1h]))",
+          "legendFormat": "{{ client }} / {{ provider }}",
           "refId": "A"
         }
       ],
-      "title": "API Tokens Used (last 24h)",
+      "title": "Token Rate (per hour)",
       "type": "timeseries"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 37 },
+      "title": "Daily Cost Tracking",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "description": "Estimated API cost last 24h across all providers (Anthropic, OpenAI, Mistral). Update pricing in prometheus/rules.yml as rates change.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 20 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 5, "w": 8, "x": 0, "y": 38 },
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "targets": [
+        {
+          "expr": "api_cost_usd:total:rate24h{client=~\"$client\"}",
+          "legendFormat": "{{ client }}",
+          "refId": "A"
+        }
+      ],
+      "title": "API Cost — Last 24h (per client)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "description": "Cost breakdown by provider for the last 24h. Shows which LLM is driving spend.",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "currencyUSD", "decimals": 2 }
+      },
+      "gridPos": { "h": 5, "w": 8, "x": 8, "y": 38 },
+      "options": {
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" },
+        "xTickLabelRotation": -20
+      },
+      "targets": [
+        {
+          "expr": "api_cost_usd:per_provider:rate1h{client=~\"$client\", provider=~\"$provider\"}",
+          "legendFormat": "{{ client }} / {{ provider }}",
+          "refId": "A"
+        }
+      ],
+      "title": "Cost by Provider — Last Hour",
+      "type": "barchart"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "description": "Hourly cost trend per client — all providers combined.",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "currencyUSD" }
+      },
+      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 38 },
+      "options": { "legend": { "calcs": ["sum", "mean"], "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "expr": "sum by (client) (api_cost_usd:per_provider:rate1h{client=~\"$client\", provider=~\"$provider\"})",
+          "legendFormat": "{{ client }}",
+          "refId": "A"
+        }
+      ],
+      "title": "Hourly Cost Trend (per client)",
+      "type": "timeseries"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 43 },
+      "title": "Monthly Billing (30-day rolling)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "description": "Rolling 30-day API cost per client — all providers. Use this as the basis for retainer invoicing.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red",    "value": 200 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 5, "w": 12, "x": 0, "y": 44 },
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "targets": [
+        {
+          "expr": "api_cost_usd:total:rate30d{client=~\"$client\"}",
+          "legendFormat": "{{ client }}",
+          "refId": "A"
+        }
+      ],
+      "title": "30-Day Rolling API Cost (retainer basis)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "description": "Token volume per provider over the last 30 days. Use this to spot which provider is driving cost and whether to switch models.",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "short", "decimals": 0 }
+      },
+      "gridPos": { "h": 5, "w": 12, "x": 12, "y": 44 },
+      "options": {
+        "barWidth": 0.7,
+        "groupWidth": 0.7,
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" },
+        "xTickLabelRotation": -20
+      },
+      "targets": [
+        {
+          "expr": "api_tokens:per_provider:rate30d{client=~\"$client\", provider=~\"$provider\"}",
+          "legendFormat": "{{ client }} / {{ provider }}",
+          "refId": "A"
+        }
+      ],
+      "title": "30-Day Token Volume by Provider",
+      "type": "barchart"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "description": "30-day cost trend over time — shows how monthly spend is evolving for each client. Good for spotting growth before it hits the invoice.",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "currencyUSD" }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 49 },
+      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "expr": "api_cost_usd:total:rate30d{client=~\"$client\"}",
+          "legendFormat": "{{ client }}",
+          "refId": "A"
+        }
+      ],
+      "title": "Monthly Cost Over Time (30-day rolling window)",
+      "type": "timeseries"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 57 },
+      "title": "Monthly Token Overview",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "description": "Total tokens consumed in the last 30 days per client. Red = over 3M tokens (review retainer). Yellow = over 1M (monitor closely).",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "max": 5000000,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1000000 },
+              { "color": "red",    "value": 3000000 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 58 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "expr": "api_tokens:total:rate30d{client=~\"$client\"}",
+          "legendFormat": "{{ client }}",
+          "refId": "A"
+        }
+      ],
+      "title": "Monthly Token Consumption — 30d Gauge",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "description": "Input vs output token split over the last 30 days. Output tokens cost 5x more — a high output ratio drives cost up fast.",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "short", "decimals": 0 }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 58 },
+      "options": {
+        "barWidth": 0.6,
+        "groupWidth": 0.7,
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" },
+        "xTickLabelRotation": 0
+      },
+      "targets": [
+        {
+          "expr": "api_tokens:by_type:rate30d{client=~\"$client\", token_type=\"input\"}",
+          "legendFormat": "{{ client }} – input",
+          "refId": "A"
+        },
+        {
+          "expr": "api_tokens:by_type:rate30d{client=~\"$client\", token_type=\"output\"}",
+          "legendFormat": "{{ client }} – output",
+          "refId": "B"
+        }
+      ],
+      "title": "Monthly Input vs Output Tokens (30d)",
+      "type": "barchart"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "description": "Monthly token total per client as a single number. Use alongside the gauge to quickly spot who needs a plan review.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1000000 },
+              { "color": "red",    "value": 3000000 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 12, "x": 0, "y": 66 },
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "targets": [
+        {
+          "expr": "api_tokens:total:rate30d{client=~\"$client\"}",
+          "legendFormat": "{{ client }}",
+          "refId": "A"
+        }
+      ],
+      "title": "Monthly Tokens (30d total per client)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "description": "Per-provider token volume over 30 days. Shows which LLM is being used most.",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "short", "decimals": 0 }
+      },
+      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 66 },
+      "options": {
+        "barWidth": 0.6,
+        "groupWidth": 0.7,
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "api_tokens:per_provider:rate30d{client=~\"$client\", provider=~\"$provider\"}",
+          "legendFormat": "{{ client }} / {{ provider }}",
+          "refId": "A"
+        }
+      ],
+      "title": "Monthly Tokens by Provider (30d)",
+      "type": "barchart"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "description": "Rolling 30-day token consumption over time — shows growth trend. A rising slope means consumption is accelerating.",
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 70 },
+      "options": {
+        "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" },
+        "thresholds": {
+          "mode": "absolute",
+          "steps": [
+            { "color": "transparent", "value": null },
+            { "color": "yellow", "value": 1000000 },
+            { "color": "red",    "value": 3000000 }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "api_tokens:total:rate30d{client=~\"$client\"}",
+          "legendFormat": "{{ client }}",
+          "refId": "A"
+        }
+      ],
+      "title": "Monthly Token Trend (30-day rolling)",
+      "type": "timeseries"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 78 },
+      "title": "Tier Thresholds & Client Config",
+      "type": "row"
+    },
+    {
+      "datasource": null,
+      "description": "Reference table from clients.yml. Update that file when onboarding a new client or changing tiers.",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 79 },
+      "options": {
+        "content": "## Client Tier Registry\n\n| Client | Tier | Daily Limit | Monthly Limit | Cost Cap/mo | Retainer | Providers |\n|---|---|---|---|---|---|---|\n| metabelly | **T1** | 100k tokens | 3M tokens | $50 | $500 | mistral-small |\n\n**Warning triggers at 80% of limit. Critical at 100%.**  \nTo add a client or change tiers → edit `dashboard/clients.yml` and update `prometheus/rules.yml`.",
+        "mode": "markdown"
+      },
+      "title": "Client Tiers (from clients.yml)",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "description": "Tier 1 < 100k tokens/day  |  Tier 2: 100k–500k/day  |  Tier 3: 500k+/day",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "min": 0,
+          "max": 600000,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 100000 },
+              { "color": "red",    "value": 500000 }
+            ]
+          },
+          "mappings": []
+        }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 85 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true,
+        "text": {}
+      },
+      "targets": [
+        {
+          "expr": "sum by (client) (increase(api_tokens_used_total{client=~\"$client\"}[24h]))",
+          "legendFormat": "{{ client }}",
+          "refId": "A"
+        }
+      ],
+      "title": "Tokens per Day — Tier Gauge (green=T1 / yellow=T2 / red=T3)",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus" },
+      "description": "Shows which tier each client is currently on based on their last 24h token consumption.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 100000 },
+              { "color": "red",    "value": 500000 }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": 0,      "to": 99999,  "result": { "text": "Tier 1", "color": "green" }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 100000, "to": 499999, "result": { "text": "Tier 2", "color": "yellow" }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 500000, "to": 1e15,   "result": { "text": "Tier 3", "color": "red" }
+              }
+            }
+          ]
+        }
+      },
+      "gridPos": { "h": 5, "w": 24, "x": 0, "y": 93 },
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "targets": [
+        {
+          "expr": "sum by (client) (increase(api_tokens_used_total{client=~\"$client\"}[24h]))",
+          "legendFormat": "{{ client }}",
+          "refId": "A"
+        }
+      ],
+      "title": "Current Tier per Client",
+      "type": "stat"
     }
+
   ],
   "refresh": "1m",
   "schemaVersion": 38,
@@ -185,5 +681,5 @@
   "timepicker": {},
   "title": "Agency Overview",
   "uid": "agency-overview-v1",
-  "version": 1
+  "version": 4
 }
